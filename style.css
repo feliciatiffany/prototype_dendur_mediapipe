@@ -13,16 +13,32 @@ body {
   top: 0; left: 0;
 }
 
-#webcam {
+#webcam-wrap {
   position: fixed;
   bottom: 20px;
   right: 20px;
   width: 160px;
   height: 120px;
-  transform: scaleX(-1);
   border: 1px solid rgba(255,255,255,0.07);
-  opacity: 0.5;
   border-radius: 2px;
+  overflow: hidden;
+}
+
+#webcam {
+  display: block;
+  width: 160px;
+  height: 120px;
+  transform: scaleX(-1);
+  opacity: 0.5;
+}
+
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 160px;
+  height: 120px;
+  pointer-events: none;
 }
 
 #title {

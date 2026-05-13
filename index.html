@@ -9,7 +9,10 @@
 <body>
 
   <canvas id="canvas"></canvas>
-  <video id="webcam" autoplay muted playsinline></video>
+  <div id="webcam-wrap">
+    <video id="webcam" autoplay muted playsinline></video>
+    <canvas id="hud"></canvas>
+  </div>
 
   <div id="title">Tracing Dendur</div>
   <div id="instructions">
@@ -31,6 +34,20 @@
     const video     = document.getElementById('webcam');
     const statusEl  = document.getElementById('status');
     const badgeEl   = document.getElementById('mode-badge');
+
+    const hudCanvas = document.getElementById('hud');
+    const hudCtx    = hudCanvas.getContext('2d');
+    hudCanvas.width  = 320;
+    hudCanvas.height = 240;
+
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [0,9],[9,10],[10,11],[11,12],
+      [0,13],[13,14],[14,15],[15,16],
+      [0,17],[17,18],[18,19],[19,20],
+      [5,9],[9,13],[13,17]
+    ];
 
     // ─── State ───────────────────────────────────────────────────────────────
     let W = 0, H = 0;
@@ -237,6 +254,55 @@
       ctx.globalCompositeOperation = 'source-over';
     }
 
+    // ─── HUD: hand skeleton overlay on webcam ────────────────────────────────
+    function drawHandOverlay(lm, isTrace) {
+      const ow = hudCanvas.width;
+      const oh = hudCanvas.height;
+      const skelColor = isTrace ? 'rgba(255,235,160,0.65)' : 'rgba(160,210,255,0.65)';
+      const tipColor  = isTrace ? 'rgba(255,245,190,1)'    : 'rgba(190,225,255,1)';
+      const label     = isTrace ? 'TRACE' : 'SCROLL';
+
+      // Mirror X to match CSS-mirrored video
+      const px = lx => (1 - lx) * ow;
+      const py = ly => ly * oh;
+
+      // Skeleton connections
+      hudCtx.strokeStyle = skelColor;
+      hudCtx.lineWidth   = 1.2;
+      HAND_CONNECTIONS.forEach(([a, b]) => {
+        hudCtx.beginPath();
+        hudCtx.moveTo(px(lm[a].x), py(lm[a].y));
+        hudCtx.lineTo(px(lm[b].x), py(lm[b].y));
+        hudCtx.stroke();
+      });
+
+      // All 21 landmark dots; landmark 8 (index tip) is larger
+      lm.forEach((p, i) => {
+        hudCtx.beginPath();
+        hudCtx.arc(px(p.x), py(p.y), i === 8 ? 5 : 2, 0, Math.PI * 2);
+        hudCtx.fillStyle = i === 8 ? tipColor : skelColor;
+        hudCtx.fill();
+      });
+
+      // Animated pulse ring on index fingertip
+      const tx = px(lm[8].x);
+      const ty = py(lm[8].y);
+      const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 180);
+      hudCtx.beginPath();
+      hudCtx.arc(tx, ty, 8 + pulse * 5, 0, Math.PI * 2);
+      hudCtx.strokeStyle = tipColor;
+      hudCtx.lineWidth   = 1;
+      hudCtx.stroke();
+
+      // Action label near index tip
+      hudCtx.font      = 'bold 10px Courier New';
+      hudCtx.fillStyle = tipColor;
+      hudCtx.textAlign = 'left';
+      const lx = tx + 9 > ow - 40 ? tx - 46 : tx + 9;
+      const ly = ty - 9 < 10      ? ty + 16  : ty - 9;
+      hudCtx.fillText(label, lx, ly);
+    }
+
     // ─── MediaPipe Hands ─────────────────────────────────────────────────────
     let handsReady = false;
 
@@ -266,6 +332,8 @@
         const handedness = results.multiHandedness || [];
         const landmarks  = results.multiHandLandmarks || [];
 
+        hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+
         let detected = [];
 
         handedness.forEach((info, i) => {
@@ -284,6 +352,7 @@
             leftIndexPos = { x: mx(lm[8].x), y: my(lm[8].y) };
             lastHandTime = Date.now();
             detected.push('L-scroll');
+            drawHandOverlay(lm, false);
 
           } else if (label === 'Left') {
             // Right hand physically → MediaPipe labels as 'Left' with mirrored camera
@@ -291,6 +360,7 @@
             rightIndexPos = { x: mx(lm[8].x), y: my(lm[8].y) };
             lastHandTime  = Date.now();
             detected.push('R-trace');
+            drawHandOverlay(lm, true);
           }
         });
 
